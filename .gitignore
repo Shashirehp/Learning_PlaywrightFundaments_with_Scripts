@@ -9,3 +9,6 @@ node_modules/
 /blob-report/
 /playwright/.cache/
 /playwright/.auth/
+
+# Local notes (nested clone of the upstream repo, not part of this project)
+Notes_MainRepo/
