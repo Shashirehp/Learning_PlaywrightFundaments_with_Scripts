@@ -9,6 +9,28 @@ node_modules/
 /blob-report/
 /playwright/.cache/
 /playwright/.auth/
+.env
+# stray codegen screenshots
+abc.png
 
-# Local notes (nested clone of the upstream repo, not part of this project)
-Notes_MainRepo/
+# macOS
+.DS_Store
+
+# saved auth state (contains live session cookies)
+user-session.json
+*storage*.json
+
+# generated reports
+/tta-report/
+/allure-results/
+/allure-report/
+/reports/
+
+# stray screenshots from keyboard lessons
+/A.png
+/O.png
+/ArrowLeft.png
+
+# downloaded files from the download lesson
+/out/
+outsample-download.txt
