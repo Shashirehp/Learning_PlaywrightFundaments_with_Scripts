@@ -4,8 +4,19 @@ import dotenv from "dotenv";
 dotenv.config();
 // Credentials live in .env (gitignored) — never hardcode them in a public repo.
 
-const VWO_USER = process.env.VWO_USER;
-const VWO_PASS = process.env.VWO_PASS;
+// Fail loudly with a readable message instead of filling `undefined` into the
+// login form, which is what happens when someone clones without a .env.
+// Returning string (not string | undefined) is what keeps page.fill type-safe.
+function requireEnv(name: string): string {
+    const value = process.env[name];
+    if (!value) {
+        throw new Error(`${name} must be set in .env (see .env.example)`);
+    }
+    return value;
+}
+
+const VWO_USER = requireEnv('VWO_USER');
+const VWO_PASS = requireEnv('VWO_PASS');
 
 async function saveSession() {
   

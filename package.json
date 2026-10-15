@@ -1,8 +1,8 @@
 {
-  "name": "learning_playwrightfundaments_with_script",
+  "name": "learningplaywrightfundamentals3x",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Playwright + TypeScript fundamentals practice repo - The Testing Academy",
+  "main": "",
   "scripts": {
     "test": "playwright test",
     "test:headed": "playwright test --headed",
@@ -11,14 +11,24 @@
     "report": "playwright show-report",
     "codegen": "playwright codegen"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "type": "commonjs",
+  "keywords": [
+    "playwright",
+    "typescript",
+    "automation",
+    "testing",
+    "codegen"
+  ],
+  "author": "Pramod Dutta",
+  "license": "MIT",
   "devDependencies": {
+    "@faker-js/faker": "^9.9.0",
     "@playwright/test": "^1.63.0",
+    "@types/js-yaml": "^4.0.9",
     "@types/node": "^26.5.0",
-    "allure-playwright": "^3.12.2"
+    "allure-playwright": "^3.12.2",
+    "exceljs": "^4.4.0",
+    "js-yaml": "^5.4.3",
+    "mysql2": "^3.24.5"
   },
   "dependencies": {
     "allure-commandline": "^2.46.1",

@@ -190,13 +190,31 @@ LearningPlaywrightFundamentals3x/
 │       ├── 274_Test.spec.ts              # conditional skip / slow / fail
 │       ├── 276_Test.spec.ts              # test.step breakdowns
 │       ├── 277_Tk.spec.ts                # beforeAll/Each, afterEach/All
-│       ├── 278.td.spec.ts                # describe.serial
-│       └── 279.tp.spec.ts                # tags and --grep
+│   │   ├── 278.td.spec.ts                # describe.serial
+│   │   └── 279.tp.spec.ts                # tags and --grep
+│   └── 19_Data_Driven_Testing/
+│       ├── 284_DDT_JSON_ARRAY.spec.ts    # inline array
+│       ├── 285_DDT_CSV.spec.ts           # CSV reader
+│       ├── 286_JSON_DDT.spec.ts          # JSON file
+│       ├── 287_DDT_EXCEL.spec.ts         # .xlsx, async -> test.step
+│       ├── 288_DDT_YAML.spec.ts          # YAML, sync -> test per row
+│       ├── 289_DDT_MYSQL.spec.ts         # MySQL, skips if unconfigured
+│       ├── 290_DDT_FAKER.spec.ts         # generated, seeded
+│   │   ├── util/                         # csv, excel, yaml, db readers
+│   │   └── test-data/                    # csv, yaml, xlsx, json, seed.sql
+│   └── 20_Page_Object_Model/
+│       ├── 291_No_POM.spec.ts            # the same test without page objects
+│       ├── 292_POM.spec.ts               # the same test with LoginPage
+│       ├── 293_cart_add_assertion.spec.ts # login -> add item -> verify cart
+│       ├── 294_heavy_page.spec.ts        # locators are lazy, methods shared
+│       └── pages/                        # LoginPage, InventoryPage, CartPage, HeavyPage
 
 ├── template/template.spec.ts  # starting skeleton for a new spec
 ├── test-data/uploads/         # shared upload fixtures (see section 32)
+├── tsconfig.json              # needed for Node globals (fs, __dirname) in the editor
 ├── ai/                        # RCA + flaky-analysis agents used by the reporter
 ├── utils/CustomReporter.ts    # custom HTML reporter (TTA branded)
+├── utils/stepScreenshot.ts    # per-step screenshots for that reporter
 ├── docs/images/               # architecture diagram (png + html source)
 ├── playwright.config.ts       # testDir, reporter, trace, headless, projects
 ├── package.json
@@ -906,7 +924,18 @@ test('dashboard loads with media captured', async ({ page }, testInfo) => {
 | `video` | `off`, `on`, `retain-on-failure` | large, a webm per test |
 | `trace` | `off`, `on`, `on-first-retry`, `retain-on-failure` | largest, ~1.3MB per test |
 
-For real suites prefer `only-on-failure` and `on-first-retry`, which is what the repo config uses by default. `on` is for when you are demonstrating the report itself.
+This repo's config sets all three to `on`, so the custom report always has media to show. That is a teaching default, not a production one: `trace: 'on'` writes roughly 1.3MB per test, which is ~180MB across the full suite. For a real suite use `only-on-failure` and `retain-on-failure`.
+
+Per-step screenshots need one more thing. Playwright's own screenshot is a single shot at the end of a test, so every step would share one image. `utils/stepScreenshot.ts` attaches one per step under the name `CustomReporter` matches:
+
+```ts
+await test.info().attach(`step-${index}-${name}`, {
+    body: await page.screenshot(),
+    contentType: 'image/png',
+});
+```
+
+The `step-<index>-` prefix with a 0-based index is the contract. See section 38 for it in use.
 
 Generated output (`tta-report/`, `allure-results/`, `reports/`) is gitignored. To view the Allure report:
 
@@ -1190,7 +1219,7 @@ test("navigate via the Make Appointment link", async ({ page }) => {
 | `<select>` | `combobox` | `dropdown` |
 | `<h1>` ... `<h6>` | `heading` | `title` |
 
-This is the top of the preference order from section 37. Reach for CSS (section 19) only when no role or label reaches the element, and for XPath (section 20) only when you need text matching or a parent walk.
+This is the top of the preference order from section 39. Reach for CSS (section 19) only when no role or label reaches the element, and for XPath (section 20) only when you need text matching or a parent walk.
 
 ---
 
@@ -2289,7 +2318,224 @@ npx playwright test --grep "@smoke|@p1"  # either
 
 ---
 
-## 37. Locator cheat sheet
+## 37. Data-driven testing: six sources, one page
+
+**Concept:** Data-driven testing means the test body is written once and the *data* varies, so adding a case is adding a row rather than writing another test.
+
+**Why:** Seven copy-pasted login tests drift apart the moment the form changes. One loop over seven rows changes in one place.
+
+**Q&A - why use this?**
+- **Q: When do I reach for it?** A: Whenever the same flow runs with different inputs, login matrices, validation rules, pricing tiers, locale checks.
+- **Q: Why does the shape of the spec change between sources?** A: Playwright collects tests **synchronously**. A sync reader (JSON, CSV, YAML, faker) has its data ready in time to create one `test()` per row. An async reader (Excel, MySQL) does not, so its rows become `test.step()`s inside one test.
+- **Q: What's the gotcha?** A: Test titles must be identical in the collection pass and the worker pass. Anything random in a title, a faker name without a fixed seed, breaks the run with "Test not found in the worker process".
+
+```mermaid
+flowchart TD
+    A[Data source] --> B{Reader sync<br/>or async?}
+    B -->|sync: JSON, CSV,<br/>YAML, faker| C[Rows ready at<br/>collection time]
+    C --> D["for &#40;row of rows&#41;<br/>test&#40;row.description&#41;"]
+    D --> E[One test per row<br/>own retry, own report line]
+    B -->|async: Excel, MySQL| F["beforeAll loads rows"]
+    F --> G["one test&#40;&#41; +<br/>test.step&#40;&#41; per row"]
+```
+
+| Spec | Source | Reader | Shape |
+|---|---|:---:|---|
+| 284 | inline array | sync | test per row |
+| 285 | CSV | sync | test per row |
+| 286 | JSON | sync | test per row |
+| 287 | Excel `.xlsx` | **async** | steps in one test |
+| 288 | YAML | sync | test per row |
+| 289 | MySQL | **async** | steps, skips if unconfigured |
+| 290 | faker | sync | test per row, seeded |
+
+**The sync case.** `tests/19_Data_Driven_Testing/288_DDT_YAML.spec.ts`, read at module load so each row becomes a real test:
+
+```ts
+const loginData = readYAML<LoginRow>(path.join(__dirname, 'test-data', 'login-data.yaml'));
+
+for (const data of loginData) {
+    test(`Login with : ${data.description}`, async ({ page }) => {
+        await page.getByRole('textbox', { name: 'Email Address' }).fill(data.username);
+        await page.getByRole('textbox', { name: 'Password' }).fill(data.password);
+        await page.getByRole('button', { name: 'Login to Practice Account' }).click();
+    });
+}
+```
+
+**The async case.** `tests/19_Data_Driven_Testing/287_DDT_EXCEL.spec.ts`, because `exceljs` returns a Promise:
+
+```ts
+let rows: LoginRow[] = [];
+test.beforeAll(async () => { rows = await readLoginDataFromExcel(XLSX_PATH); });
+
+test('login with every row from the spreadsheet', async ({ page }) => {
+    expect(rows.length).toBeGreaterThan(0);
+    for (const data of rows) {
+        await test.step(`Login with : ${data.description}`, async () => {
+            await page.goto(APP_URL);
+            // ... fill and click
+        });
+    }
+});
+```
+
+Each step still appears separately in the report, but the rows share one test, so they share one retry.
+
+**The database case.** `tests/19_Data_Driven_Testing/289_DDT_MYSQL.spec.ts` adds a guard so the repo stays green without a database:
+
+```ts
+test.skip(!isDbConfigured(), 'MYSQL_HOST is not set, see .env.example');
+```
+
+Seed it once with `mysql -u root -p < tests/19_Data_Driven_Testing/test-data/seed.sql`, then set `MYSQL_HOST` in `.env`.
+
+**The generated case, and its one rule.** `tests/19_Data_Driven_Testing/290_DDT_FAKER.spec.ts` invents data instead of reading it:
+
+```ts
+// The seed MUST be fixed. Playwright evaluates this file once to collect tests
+// and again inside the worker; a random seed produces different names, so the
+// titles differ between the two passes and every test is reported as
+// "Test not found in the worker process".
+const SEED = Number(process.env.FAKER_SEED ?? 20261013);
+faker.seed(SEED);
+
+const users = faker.helpers.multiple(() => ({
+    name: faker.person.fullName(),
+    email: faker.internet.email().toLowerCase(),
+    password: faker.internet.password({ length: 12 }),
+}), { count: 5 });
+```
+
+Run a different dataset with `FAKER_SEED=424242 npx playwright test ...`, and keep that number to replay a failure exactly.
+
+**Readers** live in `tests/19_Data_Driven_Testing/util/`: `csvReader.ts`, `excelReader.ts`, `yamlReader.ts`, `dbReader.ts`, and `generateExcel.js` to rebuild the spreadsheet. They all return the same `LoginRow` shape, which is what lets one page be driven by six different sources.
+
+```bash
+npm i -D exceljs js-yaml @types/js-yaml mysql2 @faker-js/faker@9
+```
+
+Note the `@9` on faker: version 10 is ESM-only and this repo is CommonJS.
+
+---
+
+## 38. Page Object Model
+
+**Concept:** A page object is a class that owns one screen's locators and the actions you can take on it, so tests read as intent (`loginPage.login(user, pass)`) instead of selectors.
+
+**Why:** When a selector changes, a suite without page objects needs edits in every spec that touched that element. With one, it changes in a single constructor.
+
+**Q&A - why use this?**
+- **Q: Why are the locators built in the constructor rather than as class fields?** A: A `Locator` is bound to one `Page`, and the page does not exist until a test hands one over. Playwright gives every test a fresh `page` fixture, so the constructor is the first moment one is available.
+- **Q: What does `readonly` actually do?** A: It is a compile-time guard. Assignment is allowed inside the constructor and rejected everywhere after, so a stray `=` in a test cannot silently rebind a locator. It is erased at runtime and does not freeze anything.
+- **Q: Is a big page object expensive?** A: No, and this is the point of `HeavyPage.ts`. Locators are lazy, building one records a selector and never touches the browser. 100 of them construct in about 1ms.
+
+```mermaid
+flowchart TD
+    A["new LoginPage&#40;page&#41;"] --> B[constructor binds<br/>locators to THIS page]
+    B --> C[readonly fields<br/>per instance]
+    B --> D[methods on the<br/>prototype, shared]
+    C --> E["loginPage.login&#40;user, pass&#41;"]
+    D --> E
+    E --> F[test reads as intent,<br/>selectors live in one file]
+```
+
+**tests/20_Page_Object_Model/pages/LoginPage.ts** - locators plus the action that uses them:
+
+```ts
+export class LoginPage {
+    readonly page: Page;
+    readonly emailInput: Locator;
+    readonly passwordInput: Locator;
+    readonly loginButton: Locator;
+
+    constructor(page: Page) {
+        this.page = page;
+        this.emailInput = page.getByRole('textbox', { name: 'Username' });
+        this.passwordInput = page.getByRole('textbox', { name: 'Password' });
+        this.loginButton = page.locator('[data-test="login-button"]');
+    }
+
+    async goto() {
+        await this.page.goto('https://app.thetestingacademy.com/playwright/ttacart/');
+    }
+
+    async login(username: string, password: string) {
+        await this.emailInput.fill(username);
+        await this.passwordInput.fill(password);
+        await this.loginButton.click();
+    }
+}
+```
+
+**tests/20_Page_Object_Model/293_cart_add_assertion.spec.ts** - three page objects in one flow:
+
+```ts
+await test.step('login as standard_user', async () => {
+    await loginPage.login('standard_user', 'tta_secret');
+    await expect(inventoryPage.title).toHaveText('Products');
+    await shot(page, 1, 'inventory');
+});
+
+await test.step('add the first item to the cart', async () => {
+    itemName = await inventoryPage.addFirstItemToCart();   // returns the name
+    await shot(page, 2, 'item added');
+});
+
+await test.step('verify the item is in the cart', async () => {
+    await expect(cartPage.itemName).toHaveText(itemName);  // same item, not a literal
+});
+```
+
+`addFirstItemToCart()` returns the product name so the cart assertion checks the item that was actually added. That is the kind of logic worth putting in a page object.
+
+**Compare 291 and 292.** `291_No_POM.spec.ts` inlines the locators; `292_POM.spec.ts` is the same test through `LoginPage`. Run both to see what moves out of the spec.
+
+**Where the test id attribute belongs.** TTACart tags elements with `data-test`, while `getByTestId()` looks for `data-testid`, so those calls silently match nothing. Rather than make every spec declare `test.use({ testIdAttribute: 'data-test' })`, each page object owns the detail:
+
+```ts
+constructor(page: Page) {
+    this.page = page;
+    const byTest = (id: string) => page.locator(`[data-test="${id}"]`);
+    this.title = byTest('title');
+    this.cartLink = byTest('shopping-cart-link');
+}
+```
+
+`selectors.setTestIdAttribute()` and the `testIdAttribute` config key both exist, but both are global, and the TTA practice pages in earlier modules genuinely use `data-testid`. Scoping it to the page object is what keeps both apps working.
+
+**Why a fat page object is cheap.** `pages/HeavyPage.ts` carries 100 locators and 112 methods on purpose, and `294_heavy_page.spec.ts` measures it:
+
+```ts
+const heavy = new HeavyPage(page);          // 100 locators, ~1ms
+const methods = Object.getOwnPropertyNames(HeavyPage.prototype);
+
+const another = new HeavyPage(page);        // 100 more locators
+expect(Object.getOwnPropertyNames(HeavyPage.prototype).length)
+    .toBe(methods.length);                  // but zero more methods
+```
+
+Locators are per-instance and lazy; methods live on the prototype and are shared. Neither grows the cost of a test that uses one of them.
+
+**Per-step screenshots.** `utils/stepScreenshot.ts` attaches a screenshot named `step-<index>-<name>`, which is the prefix `CustomReporter` matches to pin an image to each `test.step` (see section 15):
+
+```ts
+await test.step('open the cart', async () => {
+    await inventoryPage.openCart();
+    await shot(page, 3, 'cart');
+});
+```
+
+| Put in the page object | Keep in the test |
+|---|---|
+| Locators | Assertions about this scenario |
+| Navigation (`goto`) | Test data |
+| Reusable actions (`login`) | The order of steps |
+| App quirks (`data-test`) | What "correct" means |
+
+---
+
+## 39. Locator cheat sheet
 
 ```ts
 page.getByRole('button', { name: 'Submit' })   // preferred, accessibility based
@@ -2309,7 +2555,7 @@ Order of preference: role -> label -> placeholder -> text -> testid -> CSS/XPath
 
 ---
 
-## 38. Common assertions
+## 40. Common assertions
 
 ```ts
 await expect(page).toHaveTitle(/Playwright/);
@@ -2326,7 +2572,7 @@ All `expect` calls auto-wait, so you rarely need `waitForTimeout`.
 
 ---
 
-## 39. Troubleshooting
+## 41. Troubleshooting
 
 | Problem | Fix |
 |---------|-----|
@@ -2339,7 +2585,7 @@ All `expect` calls auto-wait, so you rarely need `waitForTimeout`.
 
 ---
 
-## 40. Useful links
+## 42. Useful links
 
 - Playwright docs: https://playwright.dev/docs/intro
 - Codegen guide: https://playwright.dev/docs/codegen

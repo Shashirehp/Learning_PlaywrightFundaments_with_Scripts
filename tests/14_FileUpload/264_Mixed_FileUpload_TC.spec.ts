@@ -3,10 +3,6 @@ import path from 'path';
 
 const URL = 'https://www.patternfly.org/components/file-upload/multiple-file-upload/';
 
-// Fixtures live in the shared test-data/uploads/ directory at the repo root,
-// so they are not duplicated next to every spec that needs them.
-const UPLOAD_DIR = path.join(__dirname, '..', '..', 'test-data', 'uploads');
-
 test.describe('FileUpload handling', () => {
 
    test.beforeEach(async ({ page }) => {
@@ -23,9 +19,9 @@ test.describe('FileUpload handling', () => {
       //   image/jpeg,.jpg,.jpeg,application/msword,.doc,application/pdf,.pdf,image/png,.png
       // so it takes .doc but silently drops .docx.
       const files = [
-         path.join(UPLOAD_DIR, 'sample.pdf'),
-         path.join(UPLOAD_DIR, 'sample.jpg'),
-         path.join(UPLOAD_DIR, 'sample.doc'),
+         path.join(__dirname, 'sample.pdf'),
+         path.join(__dirname, 'sample.jpg'),
+         path.join(__dirname, 'sample.doc'),
       ];
       files.forEach(f => console.log(f));
 
